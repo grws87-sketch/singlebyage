@@ -89,8 +89,11 @@
     </div>
   </div>
 
-  <!-- 지도가 그려질 영역 -->
+<!-- 지도가 그려질 영역 -->
   <div id="map"></div>
+
+  <!-- **중요: data.js 파일을 먼저 불러옵니다** -->
+  <script src="data.js"></script>
 
   <script>
     // 1. 지도 생성 (대한민국 중심 좌표 및 초기 줌 레벨)
@@ -101,76 +104,64 @@
     // 줌 컨트롤 버튼 오른쪽 아래로 배치
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    # 2. 배경 지도 타일 (CartoDB Light 깔끔한 지도)
+    // 2. 배경 지도 타일 (CartoDB Light 깔끔한 지도)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 18,
       attribution: '&copy; CartoDB'
     }).addTo(map);
 
-    // 3. GeoJSON 데이터 불러오기 및 지도에 시각화
-    fetch('single_age.geojson')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('GeoJSON 파일을 찾을 수 없습니다.');
-        }
-        return response.json();
-      })
-      .then(geojsonData => {
+    // 3. data.js의 데이터를 사용해 지도에 원형 마커 그리기
+    // (L.geoJSON 대신 data.js의 singleData 배열을 직접 반복합니다.)
+    if (typeof singleData !== 'undefined') {
+      singleData.forEach(function(item) {
         
-        L.geoJSON(geojsonData, {
-          // 좌표 점(Point) 데이터를 원형 마커(CircleMarker)로 변환
-          pointToLayer: function (feature, latlng) {
-            const props = feature.properties;
-            
-            // 청년 비율 vs 노인 비율 차이 계산
-            const diff = props.youth_ratio - props.senior_ratio;
-            
-            // 색상 조건 지정
-            let color = '#888888';
-            if (diff >= 0.20) color = '#1a73e8';       // 청년 매우 우세 (파랑)
-            else if (diff > 0) color = '#64b5f6';      // 청년 약우세 (연파랑)
-            else if (diff > -0.20) color = '#ff8a65';  // 노인 약우세 (주황)
-            else color = '#d32f2f';                    // 노인 매우 우세 (빨강)
+        // **중요**: data.js에 위도(lat), 경도(lng) 좌표가 있는지 확인해야 합니다.
+        // 이 예시는 data.js에 'lat', 'lng' 속성이 있다고 가정합니다.
+        if (item.lat && item.lng) {
+          
+          // 청년 비율 vs 노인 비율 차이 계산
+          const diff = item.youth_ratio - item.senior_ratio;
+          
+          // 색상 조건 지정
+          let color = '#888888';
+          if (diff >= 0.20) color = '#1a73e8';       // 청년 매우 우세 (파랑)
+          else if (diff > 0) color = '#64b5f6';      // 청년 약우세 (연파랑)
+          else if (diff > -0.20) color = '#ff8a65';  // 노인 약우세 (주황)
+          else color = '#d32f2f';                    // 노인 매우 우세 (빨강)
 
-            // 원 크기 계산 (전체 1인가구 수의 제곱근 비례)
-            const radius = Math.sqrt(props.total_single) * 0.08;
+          // 원 크기 계산 (전체 1인가구 수의 제곱근 비례)
+          const radius = Math.sqrt(item.total_single) * 0.08;
 
-            return L.circleMarker(latlng, {
-              radius: Math.max(radius, 3), // 최소 크기 보장
-              fillColor: color,
-              color: '#ffffff',            // 원 테두리 색상 (흰색)
-              weight: 1.2,                 // 테두리 두께
-              opacity: 0.9,
-              fillOpacity: 0.7
-            });
-          },
+          // 원형 마커 생성
+          const marker = L.circleMarker([item.lat, item.lng], {
+            radius: Math.max(radius, 3), // 최소 크기 보장
+            fillColor: color,
+            color: '#ffffff',            // 원 테두리 색상 (흰색)
+            weight: 1.2,                 // 테두리 두께
+            opacity: 0.9,
+            fillOpacity: 0.7
+          }).addTo(map);
 
-          // 각 마커 클릭 시 팝업 안내창 띄우기
-          onEachFeature: function (feature, layer) {
-            const props = feature.properties;
-            
-            const popupContent = `
-              <div style="padding: 4px; font-family: sans-serif;">
-                <h3 style="margin: 0 0 8px 0; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px;">
-                  ${props.fullName}
-                </h3>
-                <div style="font-size: 13px; line-height: 1.6; color: #333;">
-                  <b>전체 1인가구:</b> ${props.total_single.toLocaleString()} 가구<br>
-                  <span style="color:#1a73e8;"><b>청년 비율 (20~39세):</b> ${(props.youth_ratio * 100).toFixed(1)}%</span> (${props.youth_cnt.toLocaleString()}명)<br>
-                  <span style="color:#d32f2f;"><b>노인 비율 (65세+):</b> ${(props.senior_ratio * 100).toFixed(1)}%</span> (${props.senior_cnt.toLocaleString()}명)
-                </div>
+          // 클릭 시 팝업 안내창 내용 설정
+          const popupContent = `
+            <div style="padding: 4px; font-family: sans-serif;">
+              <h3 style="margin: 0 0 8px 0; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px;">
+                ${item.fullName}
+              </h3>
+              <div style="font-size: 13px; line-height: 1.6; color: #333;">
+                <b>전체 1인가구:</b> ${item.total_single.toLocaleString()} 가구<br>
+                <span style="color:#1a73e8;"><b>청년 비율 (20~39세):</b> ${(item.youth_ratio * 100).toFixed(1)}%</span> (${item.youth_cnt.toLocaleString()}명)<br>
+                <span style="color:#d32f2f;"><b>노인 비율 (65세+):</b> ${(item.senior_ratio * 100).toFixed(1)}%</span> (${item.senior_cnt.toLocaleString()}명)
               </div>
-            `;
-            
-            layer.bindPopup(popupContent);
-          }
-        }).addTo(map);
-
-      })
-      .catch(error => {
-        console.error('데이터 로드 중 에러 발생:', error);
+            </div>
+          `;
+          
+          marker.bindPopup(popupContent);
+        }
       });
+    } else {
+      console.error('data.js 파일을 불러오지 못했거나 singleData 변수가 정의되지 않았습니다.');
+    }
   </script>
-
 </body>
 </html>
